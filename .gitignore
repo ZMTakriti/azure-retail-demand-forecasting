@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Azure/Databricks
+.azure/
+*.log
+
+# Local data
+data/*
+
+# OS
+.DS_Store
