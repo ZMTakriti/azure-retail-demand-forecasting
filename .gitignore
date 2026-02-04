@@ -1,18 +1,58 @@
+# --------------------
 # Python
+# --------------------
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 .venv/
 .env
+.env.*
+pip-wheel-metadata/
 
-# Notebooks
+# --------------------
+# Jupyter / Notebooks
+# --------------------
 .ipynb_checkpoints/
 
-# Azure/Databricks
+# --------------------
+# Databricks / Azure
+# --------------------
 .azure/
+.databricks/
 *.log
 
-# Local data
-data/*
+# Secrets / credentials
+**/secrets*
+*.key
+*.pem
+*.pfx
+*.crt
 
-# OS
+# --------------------
+# Data (never commit)
+# --------------------
+data/*
+*.csv
+*.parquet
+*.jsonl
+
+# --------------------
+# Model artifacts
+# --------------------
+models/
+artifacts/
+*.pkl
+*.joblib
+
+# --------------------
+# Streamlit
+# --------------------
+.streamlit/secrets.toml
+
+# --------------------
+# OS / Editor
+# --------------------
 .DS_Store
+.vscode/
+.idea/
