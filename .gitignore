@@ -56,3 +56,10 @@ artifacts/
 .DS_Store
 .vscode/
 .idea/
+
+# --------------------
+# Test / CI artifacts
+# --------------------
+pytest-cache-files-*/
+.pytest_cache/
+.ruff_cache/

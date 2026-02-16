@@ -1,0 +1,19 @@
+[project]
+name = "azure-demand-forecasting"
+version = "0.1.0"
+description = "End-to-end retail demand forecasting on Azure using Walmart M5 dataset"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501"]  # Line too long - handled by formatter

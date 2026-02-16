@@ -1,0 +1,24 @@
+# Core dependencies
+numpy>=1.24.0
+pandas>=2.0.0
+lightgbm>=4.0.0
+
+# API serving
+fastapi>=0.104.0
+uvicorn>=0.24.0
+
+# Azure SQL Database
+pyodbc>=5.0.0
+
+# Testing
+pytest>=7.4.0
+
+# Linting (optional, for CI)
+ruff>=0.1.0
+
+# Streamlit dashboard
+streamlit>=1.28.0
+
+# Note: PySpark is provided by Databricks runtime, not installed locally
+# For local testing with PySpark, uncomment:
+# pyspark>=3.5.0
