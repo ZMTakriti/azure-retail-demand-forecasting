@@ -6,6 +6,7 @@ lightgbm>=4.0.0
 # API serving
 fastapi>=0.104.0
 uvicorn>=0.24.0
+httpx>=0.25.0
 
 # Azure SQL Database
 pyodbc>=5.0.0

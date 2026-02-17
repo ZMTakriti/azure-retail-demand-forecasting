@@ -58,6 +58,35 @@ def get_forecast(
     }
 
 
+@app.get("/forecast/items")
+def get_forecast_items(
+    store_id: str = Query(default="CA_1", description="Store identifier"),
+) -> dict:
+    """Return the list of items with forecasts for a given store."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT DISTINCT item_id FROM forecasts "
+        "WHERE store_id = ? "
+        "  AND model_version = (SELECT TOP 1 model_version FROM model_runs ORDER BY trained_at DESC) "
+        "ORDER BY item_id",
+        store_id,
+    )
+
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No items found for this store.")
+
+    return {
+        "store_id": store_id,
+        "items": [row[0] for row in rows],
+    }
+
+
 @app.get("/model/status")
 def model_status() -> dict:
     """Return metadata for the latest model run."""
