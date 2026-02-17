@@ -66,6 +66,13 @@ jobs:
       - name: Create deployment package
         run: zip -r deploy.zip . -x '.git/*'
 
+      - name: Configure startup command
+        run: |
+          az webapp config set \
+            --resource-group ${{ secrets.AZURE_RG }} \
+            --name ${{ secrets.AZURE_APP_NAME }} \
+            --startup-file "pip install -r requirements.txt && uvicorn src.model.serve:app --host 0.0.0.0 --port 8000"
+
       - name: Deploy to Azure App Service
         run: |
           az webapp deploy \
