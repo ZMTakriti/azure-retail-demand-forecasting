@@ -3,6 +3,8 @@
 from .transform_m5 import (
     add_day_number,
     filter_by_store,
+    join_calendar,
+    read_calendar,
     read_sales_raw,
     transform_sales_to_long,
     wide_to_long,
@@ -14,6 +16,8 @@ __all__ = [
     "filter_by_store",
     "wide_to_long",
     "add_day_number",
+    "read_calendar",
+    "join_calendar",
     "transform_sales_to_long",
     "write_parquet",
 ]

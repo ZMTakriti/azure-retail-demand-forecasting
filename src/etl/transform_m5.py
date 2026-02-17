@@ -7,6 +7,7 @@ from wide format to long format suitable for time series analysis.
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col, regexp_replace
+from pyspark.sql.types import DateType
 
 
 def read_sales_raw(spark: SparkSession, raw_path: str) -> DataFrame:
@@ -98,8 +99,64 @@ def add_day_number(df: DataFrame) -> DataFrame:
     return df.withColumn("day_num", regexp_replace("d", "d_", "").cast("int"))
 
 
+def read_calendar(spark: SparkSession, raw_path: str) -> DataFrame:
+    """
+    Read calendar.csv from the raw container.
+
+    Parameters
+    ----------
+    spark : SparkSession
+        Active Spark session.
+    raw_path : str
+        Base path to raw container.
+
+    Returns
+    -------
+    DataFrame
+        Calendar DataFrame with columns: d, cal_date, wday, month, year,
+        event_name_1, event_type_1.
+    """
+    file_path = f"{raw_path}/calendar.csv"
+    df_cal = spark.read.option("header", "true").csv(file_path)
+    df_cal = df_cal.select(
+        col("d"),
+        col("date").alias("cal_date"),
+        col("wday").cast("int"),
+        col("month").cast("int"),
+        col("year").cast("int"),
+        col("event_name_1"),
+        col("event_type_1"),
+    )
+    df_cal = df_cal.withColumn("cal_date", col("cal_date").cast(DateType()))
+    return df_cal
+
+
+def join_calendar(df_long: DataFrame, df_cal: DataFrame) -> DataFrame:
+    """
+    Join long-format sales with calendar data on the 'd' column.
+
+    Parameters
+    ----------
+    df_long : DataFrame
+        Long-format sales DataFrame with 'd' column.
+    df_cal : DataFrame
+        Calendar DataFrame from read_calendar.
+
+    Returns
+    -------
+    DataFrame
+        Sales DataFrame enriched with cal_date, wday, month, year,
+        event_name_1, event_type_1.
+    """
+    return df_long.join(df_cal, on="d", how="left")
+
+
 def transform_sales_to_long(
-    spark: SparkSession, raw_path: str, store_id: str = "CA_1", add_day_num: bool = True
+    spark: SparkSession,
+    raw_path: str,
+    store_id: str = "CA_1",
+    add_day_num: bool = True,
+    calendar_path: str | None = None,
 ) -> DataFrame:
     """
     Full ETL pipeline: read raw data, filter store, convert to long format.
@@ -116,26 +173,15 @@ def transform_sales_to_long(
         Store to filter to (default: 'CA_1').
     add_day_num : bool, optional
         Whether to add day_num column (default: True).
+    calendar_path : str, optional
+        Base path to raw container for calendar.csv. When provided, enriches
+        the output with calendar columns (cal_date, wday, month, year,
+        event_name_1, event_type_1). Default: None (no calendar join).
 
     Returns
     -------
     DataFrame
         Transformed long-format DataFrame ready for analysis/modeling.
-
-    Example
-    -------
-    >>> df = transform_sales_to_long(spark, raw_path, store_id="CA_1")
-    >>> df.printSchema()
-    root
-     |-- id: string
-     |-- item_id: string
-     |-- dept_id: string
-     |-- store_id: string
-     |-- cat_id: string
-     |-- state_id: string
-     |-- d: string
-     |-- sales: integer
-     |-- day_num: integer
     """
     df_raw = read_sales_raw(spark, raw_path)
     df_store = filter_by_store(df_raw, store_id)
@@ -143,6 +189,10 @@ def transform_sales_to_long(
 
     if add_day_num:
         df_long = add_day_number(df_long)
+
+    if calendar_path is not None:
+        df_cal = read_calendar(spark, calendar_path)
+        df_long = join_calendar(df_long, df_cal)
 
     return df_long
 

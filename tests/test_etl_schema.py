@@ -11,6 +11,12 @@ EXPECTED_COLUMNS = [
     "d",
     "sales",
     "day_num",
+    "cal_date",
+    "wday",
+    "month",
+    "year",
+    "event_name_1",
+    "event_type_1",
 ]
 
 # Required columns for modeling

@@ -64,6 +64,6 @@ The [M5 Forecasting Competition](https://www.kaggle.com/c/m5-forecasting-accurac
 | Phase | Status | Description |
 |-------|--------|-------------|
 | 1. Cloud + Repo Scaffolding | Done | ADLS, Databricks, repo structure |
-| 2. Ingestion + ETL | In progress | ADF pipeline, PySpark ETL, curated Parquet |
-| 3. Modeling + MLOps | Planned | LightGBM training, prediction store, batch inference |
+| 2. Ingestion + ETL | Done | ADF pipeline, PySpark ETL, curated Parquet |
+| 3. Modeling + MLOps | In progress | LightGBM training, prediction store, batch inference |
 | 4. Serving + Dashboard | Planned | FastAPI API, Streamlit dashboard, CI/CD deploy |
