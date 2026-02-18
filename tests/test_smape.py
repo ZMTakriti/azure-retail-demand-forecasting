@@ -1,73 +1,60 @@
-"""Unit tests for SMAPE metric."""
+"""Unit tests for MAE and RMSE metric calculations."""
 
 import numpy as np
 import pytest
 
-from src.model import smape
+
+def _mae(y_true, y_pred) -> float:
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
+    return float(np.mean(np.abs(y_true - y_pred)))
 
 
-class TestSmape:
-    """Tests for the SMAPE function."""
+def _rmse(y_true, y_pred) -> float:
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
+    return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
 
+
+class TestMAE:
     def test_perfect_prediction(self):
-        """SMAPE should be 0 for perfect predictions."""
-        y_true = [100, 200, 300]
-        y_pred = [100, 200, 300]
-        assert smape(y_true, y_pred) == pytest.approx(0.0, abs=1e-6)
-
-    def test_symmetric(self):
-        """SMAPE should be symmetric: smape(a, b) == smape(b, a)."""
-        y_true = [100, 200]
-        y_pred = [120, 180]
-        assert smape(y_true, y_pred) == pytest.approx(smape(y_pred, y_true))
+        assert _mae([100, 200, 300], [100, 200, 300]) == pytest.approx(0.0)
 
     def test_known_value(self):
-        """Test against a known SMAPE calculation."""
-        # For y_true=100, y_pred=80:
-        # SMAPE = 2 * |80-100| / (|100| + |80|) = 40/180 = 0.222...
-        # As percentage: 22.22%
-        y_true = [100]
-        y_pred = [80]
-        expected = 100 * 2 * 20 / 180  # ~22.22%
-        assert smape(y_true, y_pred) == pytest.approx(expected, rel=1e-3)
+        # |100-80| = 20 → MAE = 20
+        assert _mae([100], [80]) == pytest.approx(20.0)
 
     def test_multiple_values(self):
-        """Test SMAPE with multiple values."""
-        y_true = [100, 200, 150]
-        y_pred = [110, 190, 160]
-        # Manual calculation:
-        # |110-100|=10, denom=210, contrib=20/210
-        # |190-200|=10, denom=390, contrib=20/390
-        # |160-150|=10, denom=310, contrib=20/310
-        # SMAPE = 100/3 * sum
-        result = smape(y_true, y_pred)
-        assert 0 < result < 20  # Sanity check - should be small
+        # errors: 10, 10, 10 → MAE = 10
+        assert _mae([100, 200, 150], [110, 210, 160]) == pytest.approx(10.0)
 
     def test_handles_zeros(self):
-        """SMAPE should handle zero values without division error."""
-        y_true = [0, 100]
-        y_pred = [10, 100]
-        # Should not raise, epsilon prevents division by zero
-        result = smape(y_true, y_pred)
-        assert result > 0
-
-    def test_upper_bound(self):
-        """SMAPE should not exceed 200%."""
-        y_true = [100, 200]
-        y_pred = [0, 0]
-        result = smape(y_true, y_pred)
-        assert result <= 200
+        assert _mae([0, 100], [0, 100]) == pytest.approx(0.0)
 
     def test_numpy_arrays(self):
-        """Should work with numpy arrays."""
-        y_true = np.array([100, 200, 300])
-        y_pred = np.array([110, 190, 310])
-        result = smape(y_true, y_pred)
+        result = _mae(np.array([100, 200]), np.array([110, 190]))
         assert isinstance(result, float)
         assert result > 0
 
     def test_empty_arrays(self):
-        """Should handle empty arrays gracefully."""
-        # Empty arrays return 0 (no error to measure)
-        result = smape([], [])
-        assert result == 0.0
+        assert np.isnan(_mae([], []))
+
+
+class TestRMSE:
+    def test_perfect_prediction(self):
+        assert _rmse([100, 200, 300], [100, 200, 300]) == pytest.approx(0.0)
+
+    def test_known_value(self):
+        # error=20 → RMSE = 20
+        assert _rmse([100], [80]) == pytest.approx(20.0)
+
+    def test_penalises_large_errors(self):
+        # RMSE > MAE when errors vary
+        y_true = [100, 100]
+        y_pred = [90, 50]  # errors: 10, 50
+        assert _rmse(y_true, y_pred) > _mae(y_true, y_pred)
+
+    def test_numpy_arrays(self):
+        result = _rmse(np.array([100, 200]), np.array([110, 190]))
+        assert isinstance(result, float)
+        assert result > 0

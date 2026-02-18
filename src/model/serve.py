@@ -36,11 +36,10 @@ def get_forecast(
     cursor.execute(
         "SELECT forecast_date, predicted_sales, model_version "
         "FROM forecasts "
-        "WHERE item_id = ? AND store_id = ? "
+        "WHERE item_id = %s AND store_id = %s "
         "  AND model_version = (SELECT TOP 1 model_version FROM model_runs ORDER BY trained_at DESC) "
         "ORDER BY forecast_date",
-        item_id,
-        store_id,
+        (item_id, store_id),
     )
 
     rows = cursor.fetchall()
@@ -68,10 +67,10 @@ def get_forecast_items(
 
     cursor.execute(
         "SELECT DISTINCT item_id FROM forecasts "
-        "WHERE store_id = ? "
+        "WHERE store_id = %s "
         "  AND model_version = (SELECT TOP 1 model_version FROM model_runs ORDER BY trained_at DESC) "
         "ORDER BY item_id",
-        store_id,
+        (store_id,),
     )
 
     rows = cursor.fetchall()
@@ -94,7 +93,7 @@ def model_status() -> dict:
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT TOP 1 model_version, trained_at, smape, mae, horizon_days, num_items, store_id "
+        "SELECT TOP 1 model_version, trained_at, mae, rmse, horizon_days, num_items, store_id "
         "FROM model_runs ORDER BY trained_at DESC"
     )
 
@@ -108,8 +107,8 @@ def model_status() -> dict:
     return {
         "model_version": row[0],
         "trained_at": str(row[1]),
-        "smape": row[2],
-        "mae": row[3],
+        "mae": row[2],
+        "rmse": row[3],
         "horizon_days": row[4],
         "num_items": row[5],
         "store_id": row[6],

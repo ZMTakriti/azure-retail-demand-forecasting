@@ -51,8 +51,8 @@ def write_forecasts(
 
 def log_model_run(
     model_version: str,
-    smape: float,
     mae: float,
+    rmse: float,
     horizon_days: int,
     num_items: int,
     store_id: str,
@@ -64,10 +64,10 @@ def log_model_run(
     ----------
     model_version : str
         Unique version tag (e.g. "v1.0").
-    smape : float
-        Symmetric mean absolute percentage error on holdout.
     mae : float
         Mean absolute error on holdout.
+    rmse : float
+        Root mean squared error on holdout.
     horizon_days : int
         Number of days forecasted.
     num_items : int
@@ -83,8 +83,8 @@ def log_model_run(
         [
             {
                 "model_version": model_version,
-                "smape": smape,
                 "mae": mae,
+                "rmse": rmse,
                 "horizon_days": horizon_days,
                 "num_items": num_items,
                 "store_id": store_id,

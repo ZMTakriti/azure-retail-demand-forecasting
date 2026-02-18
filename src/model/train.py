@@ -22,39 +22,6 @@ FEATURE_COLUMNS = [
 ]
 
 
-def smape(y_true, y_pred) -> float:
-    """Calculate Symmetric Mean Absolute Percentage Error.
-
-    SMAPE is bounded between 0% and 200%, making it suitable for
-    comparing forecast accuracy across different series scales.
-
-    Parameters
-    ----------
-    y_true : array-like
-        Actual values.
-    y_pred : array-like
-        Predicted values.
-
-    Returns
-    -------
-    float
-        SMAPE value as a percentage (0-200).
-
-    Example
-    -------
-    >>> smape([100, 200], [110, 180])
-    14.285714285714285
-    """
-    y_true = np.asarray(y_true, dtype=float)
-    y_pred = np.asarray(y_pred, dtype=float)
-
-    if len(y_true) == 0:
-        return 0.0
-
-    denominator = np.abs(y_true) + np.abs(y_pred) + 1e-8
-    return 100.0 / len(y_true) * np.sum(2 * np.abs(y_pred - y_true) / denominator)
-
-
 def train_lightgbm(
     df_train: pd.DataFrame,
     df_val: pd.DataFrame,
@@ -77,7 +44,7 @@ def train_lightgbm(
     Returns
     -------
     tuple[lgb.Booster, dict]
-        Trained model and metrics dict with 'smape' and 'mae' keys.
+        Trained model and metrics dict with 'mae' and 'rmse' keys.
     """
     import lightgbm as lgb
 
@@ -107,10 +74,11 @@ def train_lightgbm(
 
     y_pred = model.predict(df_val[feature_cols], num_iteration=model.best_iteration)
     y_true = df_val["sales"].values
+    errors = y_true - y_pred
 
     metrics = {
-        "smape": smape(y_true, y_pred),
-        "mae": float(np.mean(np.abs(y_true - y_pred))),
+        "mae": float(np.mean(np.abs(errors))),
+        "rmse": float(np.sqrt(np.mean(errors ** 2))),
     }
     return model, metrics
 
@@ -168,7 +136,7 @@ def train_all_items(
     Returns
     -------
     tuple[pd.DataFrame, float, float]
-        ``(predictions_df, overall_smape, overall_mae)``
+        ``(predictions_df, overall_mae, overall_rmse)``
 
         *predictions_df* has columns: item_id, store_id,
         forecast_date, predicted_sales — matching the
@@ -176,8 +144,8 @@ def train_all_items(
     """
     item_ids = df_store["item_id"].unique()
     all_preds: list[pd.DataFrame] = []
-    all_smapes: list[float] = []
     all_maes: list[float] = []
+    all_rmses: list[float] = []
 
     for i, item_id in enumerate(item_ids):
         if i % 100 == 0:
@@ -188,8 +156,8 @@ def train_all_items(
             continue
 
         model, metrics = train_lightgbm(df_train, df_val, params=params)
-        all_smapes.append(metrics["smape"])
         all_maes.append(metrics["mae"])
+        all_rmses.append(metrics["rmse"])
 
         y_pred = model.predict(df_val[FEATURE_COLUMNS], num_iteration=model.best_iteration)
 
@@ -204,6 +172,6 @@ def train_all_items(
         all_preds.append(preds)
 
     predictions_df = pd.concat(all_preds, ignore_index=True)
-    overall_smape = float(np.mean(all_smapes))
     overall_mae = float(np.mean(all_maes))
-    return predictions_df, overall_smape, overall_mae
+    overall_rmse = float(np.mean(all_rmses))
+    return predictions_df, overall_mae, overall_rmse

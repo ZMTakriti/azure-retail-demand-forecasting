@@ -16,7 +16,6 @@ import streamlit as st
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.model import smape
 
 # -----------------------------------------------------------------------------
 # Configuration
@@ -265,16 +264,17 @@ def main():
         forecast_df = generate_forecast(df_item, horizon=horizon)
 
         # Calculate metrics
-        smape_value = smape(forecast_df["sales"].values, forecast_df["predicted"].values)
-        mae_value = np.abs(forecast_df["sales"] - forecast_df["predicted"]).mean()
+        errors = forecast_df["sales"] - forecast_df["predicted"]
+        mae_value = np.abs(errors).mean()
+        rmse_value = np.sqrt((errors ** 2).mean())
 
         st.subheader(f"Item: {selected_item}")
 
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("SMAPE", f"{smape_value:.1f}%")
-        with col2:
             st.metric("MAE", f"{mae_value:.1f}")
+        with col2:
+            st.metric("RMSE", f"{rmse_value:.1f}")
         with col3:
             st.metric("Avg Daily Sales", f"{df_item['sales'].mean():.1f}")
         with col4:

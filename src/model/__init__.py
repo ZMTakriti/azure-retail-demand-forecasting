@@ -3,7 +3,6 @@
 from .train import (
     FEATURE_COLUMNS,
     prepare_item_data,
-    smape,
     train_all_items,
     train_lightgbm,
 )
@@ -11,7 +10,6 @@ from .train import (
 __all__ = [
     "FEATURE_COLUMNS",
     "prepare_item_data",
-    "smape",
     "train_all_items",
     "train_lightgbm",
 ]

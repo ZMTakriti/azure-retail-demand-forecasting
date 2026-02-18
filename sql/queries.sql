@@ -9,9 +9,9 @@ WHERE item_id = 'FOODS_3_090'
 ORDER BY forecast_date;
 
 -- 2. All model runs ordered by performance
-SELECT run_id, model_version, trained_at, smape, mae, horizon_days, num_items
+SELECT run_id, model_version, trained_at, mae, rmse, horizon_days, num_items
 FROM model_runs
-ORDER BY smape ASC;
+ORDER BY mae ASC;
 
 -- 3. Latest model run details
 SELECT TOP 1 *
@@ -38,14 +38,15 @@ ORDER BY f.item_id;
 -- 5. Compare predictions across model versions for one item
 SELECT
     f.model_version,
-    m.smape AS model_smape,
+    m.mae AS model_mae,
+    m.rmse AS model_rmse,
     AVG(f.predicted_sales) AS avg_prediction,
     COUNT(*) AS num_forecasts
 FROM forecasts f
 JOIN model_runs m ON f.model_version = m.model_version
 WHERE f.item_id = 'FOODS_3_090'
   AND f.store_id = 'CA_1'
-GROUP BY f.model_version, m.smape
+GROUP BY f.model_version, m.mae, m.rmse
 ORDER BY m.trained_at DESC;
 
 -- 6. Top 10 items by highest predicted demand (latest model)
