@@ -78,7 +78,7 @@ def train_lightgbm(
 
     metrics = {
         "mae": float(np.mean(np.abs(errors))),
-        "rmse": float(np.sqrt(np.mean(errors ** 2))),
+        "rmse": float(np.sqrt(np.mean(errors**2))),
     }
     return model, metrics
 
