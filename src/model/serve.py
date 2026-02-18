@@ -86,6 +86,37 @@ def get_forecast_items(
     }
 
 
+@app.get("/forecast/history")
+def get_forecast_history(
+    item_id: str = Query(..., description="Item identifier, e.g. FOODS_3_090"),
+    store_id: str = Query(default="CA_1", description="Store identifier"),
+) -> dict:
+    """Return validation-period actual sales for a given item and store."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT sale_date, actual_sales FROM sales_history "
+        "WHERE item_id = %s AND store_id = %s "
+        "  AND model_version = (SELECT TOP 1 model_version FROM model_runs ORDER BY trained_at DESC) "
+        "ORDER BY sale_date",
+        (item_id, store_id),
+    )
+
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No history found for this item/store.")
+
+    return {
+        "item_id": item_id,
+        "store_id": store_id,
+        "history": [{"date": str(row[0]), "actual_sales": row[1]} for row in rows],
+    }
+
+
 @app.get("/model/status")
 def model_status() -> dict:
     """Return metadata for the latest model run."""

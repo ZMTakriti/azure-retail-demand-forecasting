@@ -24,6 +24,19 @@ CREATE INDEX ix_forecasts_item_store
 CREATE INDEX ix_forecasts_model_version
     ON forecasts (model_version);
 
+-- Store validation-period actuals for actual vs predicted charts
+CREATE TABLE sales_history (
+    id            INT IDENTITY(1,1) PRIMARY KEY,
+    item_id       VARCHAR(30)   NOT NULL,
+    store_id      VARCHAR(10)   NOT NULL,
+    sale_date     DATE          NOT NULL,
+    actual_sales  FLOAT         NOT NULL,
+    model_version VARCHAR(20)   NOT NULL
+);
+
+CREATE INDEX ix_sales_history_item_store
+    ON sales_history (item_id, store_id, sale_date);
+
 -- Store metadata for each model training run
 CREATE TABLE model_runs (
     run_id          INT IDENTITY(1,1) PRIMARY KEY,

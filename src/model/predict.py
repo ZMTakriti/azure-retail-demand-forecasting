@@ -49,6 +49,44 @@ def write_forecasts(
     return len(df)
 
 
+def write_sales_history(
+    history: pd.DataFrame,
+    model_version: str,
+) -> int:
+    """Write validation-period actuals to the `sales_history` table via Spark JDBC.
+
+    Parameters
+    ----------
+    history : pd.DataFrame
+        Must have columns: item_id, store_id, sale_date, actual_sales.
+    model_version : str
+        Version tag for this model run.
+
+    Returns
+    -------
+    int
+        Number of rows inserted.
+    """
+    from pyspark.sql import SparkSession  # noqa: PLC0415
+
+    df = history.copy()
+    df["model_version"] = model_version
+
+    spark = SparkSession.getActiveSession()
+    spark_df = spark.createDataFrame(df)
+
+    (
+        spark_df.write.format("jdbc")
+        .option("url", get_jdbc_url())
+        .option("dbtable", "sales_history")
+        .options(**get_jdbc_properties())
+        .mode("append")
+        .save()
+    )
+
+    return len(df)
+
+
 def log_model_run(
     model_version: str,
     mae: float,

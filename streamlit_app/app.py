@@ -77,6 +77,24 @@ def fetch_forecast(item_id: str, store_id: str) -> dict | None:
 
 
 @st.cache_data(ttl=30)
+def fetch_history(item_id: str, store_id: str) -> dict | None:
+    """Fetch validation-period actuals from the API. Returns None on failure."""
+    try:
+        import httpx
+
+        resp = httpx.get(
+            f"{API_URL}/forecast/history",
+            params={"item_id": item_id, "store_id": store_id},
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception:
+        pass
+    return None
+
+
+@st.cache_data(ttl=30)
 def fetch_model_status() -> dict | None:
     """Fetch model status from the API. Returns None on failure."""
     try:
@@ -195,6 +213,10 @@ def main():
             st.sidebar.markdown("**Model Info**")
             st.sidebar.text(f"Version: {model_info['model_version']}")
             st.sidebar.text(f"Trained: {model_info['trained_at']}")
+            if model_info.get("mae") is not None:
+                st.sidebar.text(f"MAE:     {model_info['mae']:.2f} units/day")
+            if model_info.get("rmse") is not None:
+                st.sidebar.text(f"RMSE:    {model_info['rmse']:.2f} units/day")
             st.sidebar.markdown("---")
 
         api_items = fetch_items("CA_1")
@@ -223,24 +245,55 @@ def main():
             st.subheader(f"Item: {selected_item}")
             st.caption(f"Model version: {forecast_data['model_version']}")
 
-            # Forecast chart
-            st.subheader(f"Predicted Sales ({len(forecast_df)} days)")
-            st.line_chart(
-                forecast_df.set_index("date")["predicted_sales"],
-                use_container_width=True,
-            )
+            # Fetch validation-period actuals for actual vs predicted chart
+            history_data = fetch_history(selected_item, "CA_1")
 
-            # Metrics
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric(
-                    "Avg Predicted Sales",
-                    f"{forecast_df['predicted_sales'].mean():.1f}",
+            if history_data and history_data["history"]:
+                history_df = pd.DataFrame(history_data["history"])
+                history_df["date"] = pd.to_datetime(history_df["date"])
+
+                combined = (
+                    history_df.rename(columns={"actual_sales": "Actual"})
+                    .set_index("date")
+                    .join(
+                        forecast_df.rename(columns={"predicted_sales": "Predicted"}).set_index(
+                            "date"
+                        ),
+                        how="outer",
+                    )
                 )
-            with col2:
-                st.metric("Forecast Days", len(forecast_df))
-            with col3:
-                st.metric("Model Version", forecast_data["model_version"])
+
+                # Compute holdout metrics
+                merged = history_df.merge(forecast_df, on="date")
+                errors = merged["actual_sales"] - merged["predicted_sales"]
+                mae_val = float(np.abs(errors).mean())
+                rmse_val = float(np.sqrt((errors**2).mean()))
+
+                st.subheader("Actual vs Predicted (Holdout Period)")
+                st.line_chart(combined[["Actual", "Predicted"]], use_container_width=True)
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("MAE", f"{mae_val:.2f} units/day")
+                with col2:
+                    st.metric("RMSE", f"{rmse_val:.2f} units/day")
+                with col3:
+                    st.metric("Avg Actual Sales", f"{history_df['actual_sales'].mean():.1f}")
+            else:
+                # History not yet available — show predictions only
+                st.subheader(f"Predicted Sales ({len(forecast_df)} days)")
+                st.line_chart(
+                    forecast_df.set_index("date")["predicted_sales"],
+                    use_container_width=True,
+                )
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Avg Predicted Sales", f"{forecast_df['predicted_sales'].mean():.1f}")
+                with col2:
+                    st.metric("Forecast Days", len(forecast_df))
+                with col3:
+                    st.metric("Model Version", forecast_data["model_version"])
 
             # Detailed table
             with st.expander("View Forecast Details"):

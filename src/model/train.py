@@ -121,8 +121,8 @@ def train_all_items(
     df_store: pd.DataFrame,
     horizon: int = 28,
     params: dict | None = None,
-) -> tuple[pd.DataFrame, float, float]:
-    """Train per-item models and collect predictions.
+) -> tuple[pd.DataFrame, pd.DataFrame, float, float]:
+    """Train per-item models and collect predictions and validation actuals.
 
     Parameters
     ----------
@@ -135,17 +135,25 @@ def train_all_items(
 
     Returns
     -------
-    tuple[pd.DataFrame, float, float]
-        ``(predictions_df, overall_mae, overall_rmse)``
+    tuple[pd.DataFrame, pd.DataFrame, float, float]
+        ``(predictions_df, history_df, overall_mae, overall_rmse)``
 
-        *predictions_df* has columns: item_id, store_id,
-        forecast_date, predicted_sales — matching the
-        ``write_forecasts`` schema.
+        *predictions_df* — columns: item_id, store_id, forecast_date,
+        predicted_sales. Matches the ``write_forecasts`` schema.
+
+        *history_df* — columns: item_id, store_id, sale_date,
+        actual_sales. Validation-period actuals for the
+        ``write_sales_history`` schema.
+
+        *overall_mae* and *overall_rmse* are unweighted means across
+        items. A volume-weighted MAE is also printed to stdout.
     """
     item_ids = df_store["item_id"].unique()
     all_preds: list[pd.DataFrame] = []
+    all_history: list[pd.DataFrame] = []
     all_maes: list[float] = []
     all_rmses: list[float] = []
+    all_weights: list[float] = []
 
     for i, item_id in enumerate(item_ids):
         if i % 100 == 0:
@@ -158,20 +166,44 @@ def train_all_items(
         model, metrics = train_lightgbm(df_train, df_val, params=params)
         all_maes.append(metrics["mae"])
         all_rmses.append(metrics["rmse"])
+        all_weights.append(float(df_train["sales"].mean()))
 
         y_pred = model.predict(df_val[FEATURE_COLUMNS], num_iteration=model.best_iteration)
 
-        preds = pd.DataFrame(
-            {
-                "item_id": item_id,
-                "store_id": df_val["store_id"].iloc[0],
-                "forecast_date": df_val["cal_date"].values,
-                "predicted_sales": y_pred,
-            }
+        all_preds.append(
+            pd.DataFrame(
+                {
+                    "item_id": item_id,
+                    "store_id": df_val["store_id"].iloc[0],
+                    "forecast_date": df_val["cal_date"].values,
+                    "predicted_sales": y_pred,
+                }
+            )
         )
-        all_preds.append(preds)
+        all_history.append(
+            pd.DataFrame(
+                {
+                    "item_id": item_id,
+                    "store_id": df_val["store_id"].iloc[0],
+                    "sale_date": df_val["cal_date"].values,
+                    "actual_sales": df_val["sales"].values.astype(float),
+                }
+            )
+        )
 
     predictions_df = pd.concat(all_preds, ignore_index=True)
+    history_df = pd.concat(all_history, ignore_index=True)
+
     overall_mae = float(np.mean(all_maes))
     overall_rmse = float(np.mean(all_rmses))
-    return predictions_df, overall_mae, overall_rmse
+
+    total_weight = sum(all_weights)
+    weighted_mae = (
+        sum(m * w for m, w in zip(all_maes, all_weights)) / total_weight
+        if total_weight > 0
+        else overall_mae
+    )
+    print(f"Unweighted MAE: {overall_mae:.2f}  (equal weight per item)")
+    print(f"Weighted MAE:   {weighted_mae:.2f}  (weighted by mean item sales volume)")
+
+    return predictions_df, history_df, overall_mae, overall_rmse
