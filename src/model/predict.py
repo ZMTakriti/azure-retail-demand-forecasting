@@ -8,14 +8,14 @@ import json
 
 import pandas as pd
 
-from src.db.connection import get_connection
+from src.db.connection import get_jdbc_properties, get_jdbc_url
 
 
 def write_forecasts(
     predictions: pd.DataFrame,
     model_version: str,
 ) -> int:
-    """Write forecast rows to the Azure SQL DB `forecasts` table.
+    """Write forecast rows to the Azure SQL DB `forecasts` table via Spark JDBC.
 
     Parameters
     ----------
@@ -29,26 +29,24 @@ def write_forecasts(
     int
         Number of rows inserted.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
+    from pyspark.sql import SparkSession  # noqa: PLC0415
 
-    rows = 0
-    for _, row in predictions.iterrows():
-        cursor.execute(
-            "INSERT INTO forecasts (item_id, store_id, forecast_date, predicted_sales, model_version) "
-            "VALUES (?, ?, ?, ?, ?)",
-            row["item_id"],
-            row["store_id"],
-            row["forecast_date"],
-            float(row["predicted_sales"]),
-            model_version,
-        )
-        rows += 1
+    df = predictions.copy()
+    df["model_version"] = model_version
 
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return rows
+    spark = SparkSession.getActiveSession()
+    spark_df = spark.createDataFrame(df)
+
+    (
+        spark_df.write.format("jdbc")
+        .option("url", get_jdbc_url())
+        .option("dbtable", "forecasts")
+        .options(**get_jdbc_properties())
+        .mode("append")
+        .save()
+    )
+
+    return len(df)
 
 
 def log_model_run(
@@ -60,7 +58,7 @@ def log_model_run(
     store_id: str,
     parameters: dict | None = None,
 ) -> None:
-    """Log a model training run to the `model_runs` table.
+    """Log a model training run to the `model_runs` table via Spark JDBC.
 
     Parameters
     ----------
@@ -79,22 +77,30 @@ def log_model_run(
     parameters : dict, optional
         Model hyperparameters to log as JSON.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
+    from pyspark.sql import SparkSession  # noqa: PLC0415
 
-    cursor.execute(
-        "INSERT INTO model_runs "
-        "(model_version, smape, mae, horizon_days, num_items, store_id, parameters) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        model_version,
-        smape,
-        mae,
-        horizon_days,
-        num_items,
-        store_id,
-        json.dumps(parameters) if parameters else None,
+    df = pd.DataFrame(
+        [
+            {
+                "model_version": model_version,
+                "smape": smape,
+                "mae": mae,
+                "horizon_days": horizon_days,
+                "num_items": num_items,
+                "store_id": store_id,
+                "parameters": json.dumps(parameters) if parameters else None,
+            }
+        ]
     )
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+    spark = SparkSession.getActiveSession()
+    spark_df = spark.createDataFrame(df)
+
+    (
+        spark_df.write.format("jdbc")
+        .option("url", get_jdbc_url())
+        .option("dbtable", "model_runs")
+        .options(**get_jdbc_properties())
+        .mode("append")
+        .save()
+    )

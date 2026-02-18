@@ -179,7 +179,9 @@ def train_all_items(
     all_smapes: list[float] = []
     all_maes: list[float] = []
 
-    for item_id in item_ids:
+    for i, item_id in enumerate(item_ids):
+        if i % 100 == 0:
+            print(f"Training item {i + 1}/{len(item_ids)}...")
         df_train, df_val = prepare_item_data(df_store, item_id, horizon)
 
         if len(df_train) == 0 or len(df_val) == 0:

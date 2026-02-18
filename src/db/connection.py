@@ -11,27 +11,46 @@ Required env vars:
 
 import os
 
-import pyodbc
 
+def get_connection():
+    """Return a pymssql connection to Azure SQL Database.
 
-def get_connection_string() -> str:
-    """Build an ODBC connection string from environment variables."""
+    Used by the FastAPI serve layer. pymssql is pure Python — no ODBC driver
+    required. Import is lazy so CI tests pass without the package installed.
+    """
+    import pymssql  # noqa: PLC0415
+
     server = os.environ["AZURE_SQL_SERVER"]
     database = os.environ["AZURE_SQL_DATABASE"]
     user = os.environ["AZURE_SQL_USER"]
     password = os.environ["AZURE_SQL_PASSWORD"]
 
-    return (
-        f"Driver={{ODBC Driver 18 for SQL Server}};"
-        f"Server=tcp:{server},1433;"
-        f"Database={database};"
-        f"Uid={user};"
-        f"Pwd={password};"
-        "Encrypt=yes;"
-        "TrustServerCertificate=no;"
+    return pymssql.connect(
+        server=server,
+        user=user,
+        password=password,
+        database=database,
+        port=1433,
+        tds_version="7.4",
     )
 
 
-def get_connection() -> pyodbc.Connection:
-    """Return a pyodbc connection to Azure SQL Database."""
-    return pyodbc.connect(get_connection_string())
+def get_jdbc_url() -> str:
+    """Build a JDBC URL for the Spark JDBC connector."""
+    server = os.environ["AZURE_SQL_SERVER"]
+    database = os.environ["AZURE_SQL_DATABASE"]
+    return (
+        f"jdbc:sqlserver://{server}:1433;"
+        f"databaseName={database};"
+        "encrypt=true;"
+        "trustServerCertificate=false;"
+    )
+
+
+def get_jdbc_properties() -> dict:
+    """Return JDBC connection properties for the Spark JDBC connector."""
+    return {
+        "user": os.environ["AZURE_SQL_USER"],
+        "password": os.environ["AZURE_SQL_PASSWORD"],
+        "driver": "com.microsoft.sqlserver.jdbc.SQLServerDriver",
+    }
