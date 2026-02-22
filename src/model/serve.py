@@ -35,9 +35,13 @@ def get_forecast(
 
     cursor.execute(
         "SELECT forecast_date, predicted_sales, model_version "
-        "FROM forecasts "
-        "WHERE item_id = %s AND store_id = %s "
-        "  AND model_version = (SELECT TOP 1 model_version FROM model_runs ORDER BY trained_at DESC) "
+        "FROM ("
+        "  SELECT forecast_date, predicted_sales, model_version,"
+        "    ROW_NUMBER() OVER (PARTITION BY forecast_date ORDER BY id DESC) AS rn"
+        "  FROM forecasts"
+        "  WHERE item_id = %s AND store_id = %s"
+        "    AND model_version = (SELECT TOP 1 model_version FROM model_runs WHERE is_active = 1 ORDER BY trained_at DESC)"
+        ") t WHERE rn = 1 "
         "ORDER BY forecast_date",
         (item_id, store_id),
     )
@@ -60,18 +64,44 @@ def get_forecast(
 @app.get("/forecast/items")
 def get_forecast_items(
     store_id: str = Query(default="CA_1", description="Store identifier"),
+    sort_by: str = Query(
+        default="name", description="Sort order: 'name' (alphabetical) or 'volume' (avg sales desc)"
+    ),
 ) -> dict:
-    """Return the list of items with forecasts for a given store."""
+    """Return items with forecasts for a given store.
+
+    sort_by='name' returns alphabetical order (default).
+    sort_by='volume' joins sales_history and orders by avg actual_sales descending.
+    """
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        "SELECT DISTINCT item_id FROM forecasts "
-        "WHERE store_id = %s "
-        "  AND model_version = (SELECT TOP 1 model_version FROM model_runs ORDER BY trained_at DESC) "
-        "ORDER BY item_id",
-        (store_id,),
-    )
+    if sort_by == "volume":
+        cursor.execute(
+            "SELECT f.item_id "
+            "FROM ("
+            "  SELECT DISTINCT item_id FROM forecasts"
+            "  WHERE store_id = %s"
+            "    AND model_version = (SELECT TOP 1 model_version FROM model_runs WHERE is_active = 1 ORDER BY trained_at DESC)"
+            ") f "
+            "LEFT JOIN ("
+            "  SELECT item_id, AVG(actual_sales) AS avg_sales"
+            "  FROM sales_history"
+            "  WHERE store_id = %s"
+            "    AND model_version = (SELECT TOP 1 model_version FROM model_runs WHERE is_active = 1 ORDER BY trained_at DESC)"
+            "  GROUP BY item_id"
+            ") h ON f.item_id = h.item_id "
+            "ORDER BY COALESCE(h.avg_sales, 0) DESC",
+            (store_id, store_id),
+        )
+    else:
+        cursor.execute(
+            "SELECT DISTINCT item_id FROM forecasts "
+            "WHERE store_id = %s "
+            "  AND model_version = (SELECT TOP 1 model_version FROM model_runs WHERE is_active = 1 ORDER BY trained_at DESC) "
+            "ORDER BY item_id",
+            (store_id,),
+        )
 
     rows = cursor.fetchall()
     cursor.close()
@@ -96,9 +126,14 @@ def get_forecast_history(
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT sale_date, actual_sales FROM sales_history "
-        "WHERE item_id = %s AND store_id = %s "
-        "  AND model_version = (SELECT TOP 1 model_version FROM model_runs ORDER BY trained_at DESC) "
+        "SELECT sale_date, actual_sales "
+        "FROM ("
+        "  SELECT sale_date, actual_sales,"
+        "    ROW_NUMBER() OVER (PARTITION BY sale_date ORDER BY id DESC) AS rn"
+        "  FROM sales_history"
+        "  WHERE item_id = %s AND store_id = %s"
+        "    AND model_version = (SELECT TOP 1 model_version FROM model_runs WHERE is_active = 1 ORDER BY trained_at DESC)"
+        ") t WHERE rn = 1 "
         "ORDER BY sale_date",
         (item_id, store_id),
     )
@@ -119,13 +154,13 @@ def get_forecast_history(
 
 @app.get("/model/status")
 def model_status() -> dict:
-    """Return metadata for the latest model run."""
+    """Return metadata for the latest active model run."""
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT TOP 1 model_version, trained_at, mae, rmse, horizon_days, num_items, store_id "
-        "FROM model_runs ORDER BY trained_at DESC"
+        "SELECT TOP 1 model_version, trained_at, mae, rmse, weighted_mae, horizon_days, num_items, store_id "
+        "FROM model_runs WHERE is_active = 1 ORDER BY trained_at DESC"
     )
 
     row = cursor.fetchone()
@@ -140,7 +175,8 @@ def model_status() -> dict:
         "trained_at": str(row[1]),
         "mae": row[2],
         "rmse": row[3],
-        "horizon_days": row[4],
-        "num_items": row[5],
-        "store_id": row[6],
+        "weighted_mae": row[4],
+        "horizon_days": row[5],
+        "num_items": row[6],
+        "store_id": row[7],
     }

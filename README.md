@@ -1,6 +1,10 @@
 # Azure Retail Demand Forecasting
 
-End-to-end demand forecasting pipeline on Azure using the [Walmart M5 dataset](https://www.kaggle.com/c/m5-forecasting-accuracy). Raw sales data flows through a PySpark ETL orchestrated by Azure Data Factory, a LightGBM model generates batch forecasts written to a SQL prediction store, and a FastAPI endpoint serves results to a Streamlit dashboard.
+![CI](https://github.com/ZMTakriti/azure-retail-demand-forecasting/actions/workflows/ci.yml/badge.svg)
+
+End-to-end demand forecasting pipeline on Azure using the [Walmart M5 dataset](https://www.kaggle.com/c/m5-forecasting-accuracy). Raw sales data is ingested to ADLS Gen2, a PySpark ETL on Databricks produces curated Parquet, a LightGBM model generates batch forecasts written to an Azure SQL prediction store, a FastAPI endpoint serves results, and a Streamlit dashboard visualises them.
+
+**[Live Dashboard →](https://zmt-azure-retail-demand-forecasting.streamlit.app/)**
 
 ## Architecture
 
@@ -15,12 +19,6 @@ End-to-end demand forecasting pipeline on Azure using the [Walmart M5 dataset](h
  │  └──────┬──────┘    └──────▲───────┘                                 │
  │         │                  │                                         │
  │         ▼                  │                                         │
- │  ┌─────────────────────────┴──────┐                                  │
- │  │  Azure Data Factory            │                                  │
- │  │  (orchestration + scheduling)  │                                  │
- │  └─────────────┬──────────────────┘                                  │
- │                │ triggers                                            │
- │                ▼                                                     │
  │  ┌────────────────────────────────┐                                  │
  │  │  Databricks (dbw-m5-forecast)  │                                  │
  │  │  PySpark ETL + LightGBM Train  │                                  │
@@ -37,8 +35,8 @@ End-to-end demand forecasting pipeline on Azure using the [Walmart M5 dataset](h
                                                         │
                                                         ▼
                                               ┌──────────────────┐
-                                              │  Streamlit        │
-                                              │  Dashboard        │
+                                              │  Streamlit       │
+                                              │  Dashboard       │
                                               └──────────────────┘
 ```
 
@@ -47,7 +45,6 @@ End-to-end demand forecasting pipeline on Azure using the [Walmart M5 dataset](h
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
 | Storage | ADLS Gen2 | Raw CSV + curated Parquet zones |
-| Orchestration | Azure Data Factory | Schedule and trigger ETL/training jobs |
 | Compute | Azure Databricks (PySpark) | ETL transformations + model training |
 | Model | LightGBM | Gradient-boosted demand forecasting |
 | Prediction Store | Azure SQL Database | Batch forecasts + model run metadata |
@@ -64,6 +61,6 @@ The [M5 Forecasting Competition](https://www.kaggle.com/c/m5-forecasting-accurac
 | Phase | Status | Description |
 |-------|--------|-------------|
 | 1. Cloud + Repo Scaffolding | Done | ADLS, Databricks, repo structure |
-| 2. Ingestion + ETL | Done | ADF pipeline, PySpark ETL, curated Parquet |
+| 2. Ingestion + ETL | Done | PySpark ETL, curated Parquet |
 | 3. Modeling + MLOps | Done | LightGBM training, prediction store, batch inference |
 | 4. Serving + Dashboard | Done | FastAPI API, Streamlit dashboard, CI/CD deploy |

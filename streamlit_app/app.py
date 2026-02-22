@@ -45,12 +45,16 @@ def _api_available() -> bool:
 
 
 @st.cache_data(ttl=30)
-def fetch_items(store_id: str) -> list[str] | None:
+def fetch_items(store_id: str, sort_by: str = "name") -> list[str] | None:
     """Fetch available items from the API. Returns None on failure."""
     try:
         import httpx
 
-        resp = httpx.get(f"{API_URL}/forecast/items", params={"store_id": store_id}, timeout=5)
+        resp = httpx.get(
+            f"{API_URL}/forecast/items",
+            params={"store_id": store_id, "sort_by": sort_by},
+            timeout=5,
+        )
         if resp.status_code == 200:
             return resp.json()["items"]
     except Exception:
@@ -217,9 +221,14 @@ def main():
                 st.sidebar.text(f"MAE:     {model_info['mae']:.2f} units/day")
             if model_info.get("rmse") is not None:
                 st.sidebar.text(f"RMSE:    {model_info['rmse']:.2f} units/day")
+            if model_info.get("weighted_mae") is not None:
+                st.sidebar.text(f"W-MAE:   {model_info['weighted_mae']:.2f} units/day")
             st.sidebar.markdown("---")
 
-        api_items = fetch_items("CA_1")
+        sort_by_volume = st.sidebar.checkbox("Sort items by sales volume", value=False)
+        sort_by = "volume" if sort_by_volume else "name"
+
+        api_items = fetch_items("CA_1", sort_by=sort_by)
         if api_items:
             items = api_items
         else:

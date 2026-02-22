@@ -11,6 +11,29 @@ import pandas as pd
 from src.db.connection import get_jdbc_properties, get_jdbc_url
 
 
+def delete_model_version(model_version: str) -> None:
+    """Delete all data for a model version from forecasts, sales_history, and model_runs.
+
+    Call this before re-writing a version to prevent duplicate rows.
+
+    Parameters
+    ----------
+    model_version : str
+        Version tag to purge (e.g. "v6.0").
+    """
+    import pymssql  # noqa: PLC0415
+
+    from src.db.connection import get_connection  # noqa: PLC0415
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    for table in ("forecasts", "sales_history", "model_runs"):
+        cursor.execute(f"DELETE FROM {table} WHERE model_version = %s", (model_version,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
 def write_forecasts(
     predictions: pd.DataFrame,
     model_version: str,
@@ -91,12 +114,16 @@ def log_model_run(
     model_version: str,
     mae: float,
     rmse: float,
+    weighted_mae: float,
     horizon_days: int,
     num_items: int,
     store_id: str,
     parameters: dict | None = None,
 ) -> None:
     """Log a model training run to the `model_runs` table via Spark JDBC.
+
+    After writing, promotes this version to active (is_active = 1) and
+    deactivates all other versions.
 
     Parameters
     ----------
@@ -106,6 +133,8 @@ def log_model_run(
         Mean absolute error on holdout.
     rmse : float
         Root mean squared error on holdout.
+    weighted_mae : float
+        Volume-weighted MAE across items.
     horizon_days : int
         Number of days forecasted.
     num_items : int
@@ -123,6 +152,7 @@ def log_model_run(
                 "model_version": model_version,
                 "mae": mae,
                 "rmse": rmse,
+                "weighted_mae": weighted_mae,
                 "horizon_days": horizon_days,
                 "num_items": num_items,
                 "store_id": store_id,
@@ -142,3 +172,18 @@ def log_model_run(
         .mode("append")
         .save()
     )
+
+    # Promote this version to active; deactivate all others
+    import pymssql  # noqa: PLC0415
+
+    from src.db.connection import get_connection  # noqa: PLC0415
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE model_runs SET is_active = 0 WHERE model_version != %s", (model_version,)
+    )
+    cursor.execute("UPDATE model_runs SET is_active = 1 WHERE model_version = %s", (model_version,))
+    conn.commit()
+    cursor.close()
+    conn.close()

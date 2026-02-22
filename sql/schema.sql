@@ -13,7 +13,8 @@ CREATE TABLE forecasts (
     forecast_date   DATE          NOT NULL,
     predicted_sales FLOAT         NOT NULL,
     model_version   VARCHAR(20)   NOT NULL,
-    created_at      DATETIME      DEFAULT GETDATE()
+    created_at      DATETIME      DEFAULT GETDATE(),
+    CONSTRAINT uq_forecasts UNIQUE (item_id, store_id, forecast_date, model_version)
 );
 
 -- Index for the most common query pattern: lookup by item + store
@@ -31,7 +32,8 @@ CREATE TABLE sales_history (
     store_id      VARCHAR(10)   NOT NULL,
     sale_date     DATE          NOT NULL,
     actual_sales  FLOAT         NOT NULL,
-    model_version VARCHAR(20)   NOT NULL
+    model_version VARCHAR(20)   NOT NULL,
+    CONSTRAINT uq_sales_history UNIQUE (item_id, store_id, sale_date, model_version)
 );
 
 CREATE INDEX ix_sales_history_item_store
@@ -44,8 +46,10 @@ CREATE TABLE model_runs (
     trained_at      DATETIME      DEFAULT GETDATE(),
     mae             FLOAT,
     rmse            FLOAT,
+    weighted_mae    FLOAT,
     horizon_days    INT           NOT NULL,
     num_items       INT,
     store_id        VARCHAR(10),
-    parameters      NVARCHAR(MAX) -- JSON blob with hyperparameters
+    parameters      NVARCHAR(MAX), -- JSON blob with hyperparameters
+    is_active       BIT           NOT NULL DEFAULT 0
 );

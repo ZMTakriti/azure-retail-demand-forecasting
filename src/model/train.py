@@ -121,7 +121,7 @@ def train_all_items(
     df_store: pd.DataFrame,
     horizon: int = 28,
     params: dict | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame, float, float]:
+) -> tuple[pd.DataFrame, pd.DataFrame, float, float, float]:
     """Train per-item models and collect predictions and validation actuals.
 
     Parameters
@@ -135,8 +135,8 @@ def train_all_items(
 
     Returns
     -------
-    tuple[pd.DataFrame, pd.DataFrame, float, float]
-        ``(predictions_df, history_df, overall_mae, overall_rmse)``
+    tuple[pd.DataFrame, pd.DataFrame, float, float, float]
+        ``(predictions_df, history_df, overall_mae, overall_rmse, weighted_mae)``
 
         *predictions_df* — columns: item_id, store_id, forecast_date,
         predicted_sales. Matches the ``write_forecasts`` schema.
@@ -146,7 +146,7 @@ def train_all_items(
         ``write_sales_history`` schema.
 
         *overall_mae* and *overall_rmse* are unweighted means across
-        items. A volume-weighted MAE is also printed to stdout.
+        items. *weighted_mae* is volume-weighted by mean item sales.
     """
     item_ids = df_store["item_id"].unique()
     all_preds: list[pd.DataFrame] = []
@@ -206,4 +206,4 @@ def train_all_items(
     print(f"Unweighted MAE: {overall_mae:.2f}  (equal weight per item)")
     print(f"Weighted MAE:   {weighted_mae:.2f}  (weighted by mean item sales volume)")
 
-    return predictions_df, history_df, overall_mae, overall_rmse
+    return predictions_df, history_df, overall_mae, overall_rmse, weighted_mae
