@@ -21,8 +21,6 @@ def delete_model_version(model_version: str) -> None:
     model_version : str
         Version tag to purge (e.g. "v6.0").
     """
-    import pymssql  # noqa: PLC0415
-
     from src.db.connection import get_connection  # noqa: PLC0415
 
     conn = get_connection()
@@ -174,8 +172,6 @@ def log_model_run(
     )
 
     # Promote this version to active; deactivate all others
-    import pymssql  # noqa: PLC0415
-
     from src.db.connection import get_connection  # noqa: PLC0415
 
     conn = get_connection()
