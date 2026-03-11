@@ -11,6 +11,10 @@ from fastapi import FastAPI, HTTPException, Query
 
 from src.db.connection import get_connection
 
+_ACTIVE_VER = (
+    "SELECT TOP 1 model_version FROM model_runs WHERE is_active = 1 ORDER BY trained_at DESC"
+)
+
 app = FastAPI(
     title="M5 Demand Forecast API",
     description="REST API serving batch forecasts from the prediction store.",
@@ -37,10 +41,10 @@ def get_forecast(
         "SELECT forecast_date, predicted_sales, model_version "
         "FROM ("
         "  SELECT forecast_date, predicted_sales, model_version,"
-        "    ROW_NUMBER() OVER (PARTITION BY forecast_date ORDER BY id DESC) AS rn"
+        f"    ROW_NUMBER() OVER (PARTITION BY forecast_date ORDER BY id DESC) AS rn"
         "  FROM forecasts"
         "  WHERE item_id = %s AND store_id = %s"
-        "    AND model_version = (SELECT TOP 1 model_version FROM model_runs WHERE is_active = 1 ORDER BY trained_at DESC)"
+        f"    AND model_version = ({_ACTIVE_VER})"
         ") t WHERE rn = 1 "
         "ORDER BY forecast_date",
         (item_id, store_id),
@@ -65,16 +69,21 @@ def get_forecast(
 def get_forecast_items(
     store_id: str = Query(default="CA_1", description="Store identifier"),
     sort_by: str = Query(
-        default="name", description="Sort order: 'name' (alphabetical) or 'volume' (avg sales desc)"
+        default="name",
+        description="Sort order: 'name' (alphabetical) or 'volume' (avg sales desc)",
     ),
+    dept: str | None = Query(default=None, description="Filter by department, e.g. FOODS"),
 ) -> dict:
     """Return items with forecasts for a given store.
 
-    sort_by='name' returns alphabetical order (default).
-    sort_by='volume' joins sales_history and orders by avg actual_sales descending.
+    sort_by='name' — alphabetical (default).
+    sort_by='volume' — ordered by avg actual_sales descending.
+    dept — optional filter by department prefix (FOODS, HOBBIES, HOUSEHOLD).
     """
     conn = get_connection()
     cursor = conn.cursor()
+
+    dept_clause = " AND LEFT(item_id, CHARINDEX('_', item_id) - 1) = %s" if dept else ""
 
     if sort_by == "volume":
         cursor.execute(
@@ -82,25 +91,28 @@ def get_forecast_items(
             "FROM ("
             "  SELECT DISTINCT item_id FROM forecasts"
             "  WHERE store_id = %s"
-            "    AND model_version = (SELECT TOP 1 model_version FROM model_runs WHERE is_active = 1 ORDER BY trained_at DESC)"
+            f"    AND model_version = ({_ACTIVE_VER})"
+            f"    {dept_clause}"
             ") f "
             "LEFT JOIN ("
             "  SELECT item_id, AVG(actual_sales) AS avg_sales"
             "  FROM sales_history"
             "  WHERE store_id = %s"
-            "    AND model_version = (SELECT TOP 1 model_version FROM model_runs WHERE is_active = 1 ORDER BY trained_at DESC)"
+            f"    AND model_version = ({_ACTIVE_VER})"
+            f"    {dept_clause}"
             "  GROUP BY item_id"
             ") h ON f.item_id = h.item_id "
             "ORDER BY COALESCE(h.avg_sales, 0) DESC",
-            (store_id, store_id),
+            (store_id,) + ((dept,) if dept else ()) + (store_id,) + ((dept,) if dept else ()),
         )
     else:
         cursor.execute(
             "SELECT DISTINCT item_id FROM forecasts "
             "WHERE store_id = %s "
-            "  AND model_version = (SELECT TOP 1 model_version FROM model_runs WHERE is_active = 1 ORDER BY trained_at DESC) "
+            f"  AND model_version = ({_ACTIVE_VER}) "
+            f"  {dept_clause}"
             "ORDER BY item_id",
-            (store_id,),
+            (store_id,) + ((dept,) if dept else ()),
         )
 
     rows = cursor.fetchall()
@@ -113,6 +125,42 @@ def get_forecast_items(
     return {
         "store_id": store_id,
         "items": [row[0] for row in rows],
+    }
+
+
+@app.get("/forecast/departments")
+def get_forecast_departments(
+    store_id: str = Query(default="CA_1", description="Store identifier"),
+) -> dict:
+    """Return per-department summary: item count and avg daily forecast for the active model."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT "
+        "  LEFT(item_id, CHARINDEX('_', item_id) - 1) AS dept, "
+        "  COUNT(DISTINCT item_id) AS item_count, "
+        "  AVG(predicted_sales) AS avg_daily_forecast "
+        "FROM forecasts "
+        "WHERE store_id = %s "
+        f"  AND model_version = ({_ACTIVE_VER}) "
+        "GROUP BY LEFT(item_id, CHARINDEX('_', item_id) - 1) "
+        "ORDER BY avg_daily_forecast DESC",
+        (store_id,),
+    )
+
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No department data found.")
+
+    return {
+        "store_id": store_id,
+        "departments": [
+            {"dept": row[0], "item_count": row[1], "avg_daily_forecast": row[2]} for row in rows
+        ],
     }
 
 
@@ -129,10 +177,10 @@ def get_forecast_history(
         "SELECT sale_date, actual_sales "
         "FROM ("
         "  SELECT sale_date, actual_sales,"
-        "    ROW_NUMBER() OVER (PARTITION BY sale_date ORDER BY id DESC) AS rn"
+        f"    ROW_NUMBER() OVER (PARTITION BY sale_date ORDER BY id DESC) AS rn"
         "  FROM sales_history"
         "  WHERE item_id = %s AND store_id = %s"
-        "    AND model_version = (SELECT TOP 1 model_version FROM model_runs WHERE is_active = 1 ORDER BY trained_at DESC)"
+        f"    AND model_version = ({_ACTIVE_VER})"
         ") t WHERE rn = 1 "
         "ORDER BY sale_date",
         (item_id, store_id),

@@ -19,6 +19,7 @@ ruff>=0.1.0
 
 # Streamlit dashboard
 streamlit>=1.28.0
+plotly>=5.18.0
 
 # Note: PySpark is provided by Databricks runtime, not installed locally
 # For local testing with PySpark, uncomment:

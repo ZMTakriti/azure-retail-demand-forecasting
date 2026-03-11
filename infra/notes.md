@@ -8,7 +8,7 @@ is portal-only; nothing is committed as code.
 - Azure Data Factory instance in the same subscription
 - Azure Databricks workspace with the repo synced
 - ADLS Gen2 storage account (`stgm5forecastdev`) with `raw` and `curated` containers
-- Databricks secret scope `m5-scope` containing the ADLS account key
+- Databricks secret scope `m5-scope` containing the ADLS account key + SQL credentials
 
 ## 1. Create Linked Service - ADLS Gen2
 
@@ -32,29 +32,40 @@ is portal-only; nothing is committed as code.
 ## 3. Create Pipeline
 
 1. **Author > Pipelines > + New pipeline**.
-2. Name it `etl-m5-daily`.
-3. Drag a **Databricks Notebook** activity onto the canvas.
-4. Configure the activity:
+2. Name it `etl-m5-train`.
+3. Add two pipeline parameters (top-level, not activity-level):
+   - `model_version` (String) — e.g. `v7.0`
+   - `store_id` (String, default `CA_1`)
+4. Drag a **Databricks Notebook** activity onto the canvas.
+5. Configure the activity:
    - **Linked service**: select the Databricks linked service from step 2.
    - **Notebook path**: `/Repos/<user>/azure-demand-forecasting/notebooks/etl_m5_databricks`
-   - Leave base parameters empty (the notebook reads config from its own cells).
-5. Validate and publish.
+   - **Base parameters**: add two entries:
+     - `model_version` → `@pipeline().parameters.model_version`
+     - `store_id` → `@pipeline().parameters.store_id`
+6. Validate and publish.
 
 ## 4. Configure Trigger
 
 ### Manual (dev)
 
-Use **Trigger now** from the pipeline toolbar to run on demand.
+Use **Trigger now** from the pipeline toolbar. You will be prompted to fill in
+`model_version` (e.g. `v7.0`) and `store_id` (`CA_1`) before the run starts.
 
 ### Scheduled (prod)
 
 1. **Add trigger > New/Edit** on the pipeline.
 2. Choose **Schedule**.
-3. Set recurrence (e.g., daily at 02:00 UTC).
-4. Activate and publish.
+3. Set recurrence (e.g., weekly or monthly — M5 is a static dataset).
+4. In the trigger parameters, set `model_version` to a dynamic expression:
+   `@formatDateTime(trigger().startTime, 'v'yyyy-MM-dd'')` — produces e.g. `v2026-03-01`.
+5. Set `store_id` to `CA_1` (or parameterise for multi-store later).
+6. Activate and publish.
 
 ## 5. Monitoring
 
 - **Monitor > Pipeline runs** shows execution history.
 - Click a run to see the Databricks notebook output link.
 - Failed runs surface the Spark driver log from Databricks.
+- If a run fails mid-way, cell 13 can be re-run safely — it loads metrics and
+  data from ADLS checkpoints and calls `delete_model_version` before writing.
