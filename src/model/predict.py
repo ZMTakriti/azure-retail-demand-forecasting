@@ -56,12 +56,13 @@ def write_forecasts(
     df["model_version"] = model_version
 
     spark = SparkSession.getActiveSession()
-    spark_df = spark.createDataFrame(df)
+    spark_df = spark.createDataFrame(df).repartition(1)
 
     (
         spark_df.write.format("jdbc")
         .option("url", get_jdbc_url())
         .option("dbtable", "forecasts")
+        .option("batchsize", 1000)
         .options(**get_jdbc_properties())
         .mode("append")
         .save()
@@ -94,12 +95,13 @@ def write_sales_history(
     df["model_version"] = model_version
 
     spark = SparkSession.getActiveSession()
-    spark_df = spark.createDataFrame(df)
+    spark_df = spark.createDataFrame(df).repartition(1)
 
     (
         spark_df.write.format("jdbc")
         .option("url", get_jdbc_url())
         .option("dbtable", "sales_history")
+        .option("batchsize", 1000)
         .options(**get_jdbc_properties())
         .mode("append")
         .save()
