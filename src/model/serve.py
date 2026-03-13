@@ -138,13 +138,18 @@ def get_forecast_departments(
 
     cursor.execute(
         "SELECT "
-        "  LEFT(item_id, CHARINDEX('_', item_id) - 1) AS dept, "
-        "  COUNT(DISTINCT item_id) AS item_count, "
-        "  AVG(predicted_sales) AS avg_daily_forecast "
-        "FROM forecasts "
-        "WHERE store_id = %s "
-        f"  AND model_version = ({_ACTIVE_VER}) "
-        "GROUP BY LEFT(item_id, CHARINDEX('_', item_id) - 1) "
+        "  LEFT(f.item_id, CHARINDEX('_', f.item_id) - 1) AS dept, "
+        "  COUNT(DISTINCT f.item_id) AS item_count, "
+        "  AVG(f.predicted_sales) AS avg_daily_forecast, "
+        "  AVG(ABS(f.predicted_sales - h.actual_sales)) AS dept_mae "
+        "FROM forecasts f "
+        "LEFT JOIN sales_history h "
+        "  ON f.item_id = h.item_id AND f.store_id = h.store_id "
+        "  AND f.forecast_date = h.sale_date "
+        f"  AND h.model_version = ({_ACTIVE_VER}) "
+        "WHERE f.store_id = %s "
+        f"  AND f.model_version = ({_ACTIVE_VER}) "
+        "GROUP BY LEFT(f.item_id, CHARINDEX('_', f.item_id) - 1) "
         "ORDER BY avg_daily_forecast DESC",
         (store_id,),
     )
@@ -159,7 +164,13 @@ def get_forecast_departments(
     return {
         "store_id": store_id,
         "departments": [
-            {"dept": row[0], "item_count": row[1], "avg_daily_forecast": row[2]} for row in rows
+            {
+                "dept": row[0],
+                "item_count": row[1],
+                "avg_daily_forecast": row[2],
+                "dept_mae": row[3],
+            }
+            for row in rows
         ],
     }
 

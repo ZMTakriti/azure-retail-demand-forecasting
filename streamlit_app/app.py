@@ -200,12 +200,17 @@ def _dept_bar_chart(dept_data: list[dict]) -> go.Figure:
     counts = [d["item_count"] for d in dept_data]
     colors = [DEPT_COLORS.get(d, "#9467bd") for d in depts]
 
+    def _label(v, c, d):
+        mae = d.get("dept_mae")
+        mae_str = f"  MAE {mae:.2f}" if mae is not None else ""
+        return f"{v:.1f} units/day  ({c} items){mae_str}"
+
     fig = go.Figure(
         go.Bar(
             x=vals,
             y=depts,
             orientation="h",
-            text=[f"{v:.1f} units/day  ({c} items)" for v, c in zip(vals, counts)],
+            text=[_label(v, c, d) for v, c, d in zip(vals, counts, dept_data)],
             textposition="auto",
             marker_color=colors,
         )
